@@ -131,9 +131,15 @@ def main(frames, scenes, bounces, ball_track, homography_matrices, kps_court, pe
 def write(imgs_res, fps, path_output_video):
     height, width = imgs_res[0].shape[:2]
     out = cv2.VideoWriter(path_output_video, cv2.VideoWriter_fourcc(*'DIVX'), fps, (width, height))
+
+    total_frames = len(imgs_res)
     for num in range(len(imgs_res)):
         frame = imgs_res[num]
         out.write(frame)
+
+        # Cập nhật tiến trình (in ra tiến trình mỗi 10%)
+        if num % (total_frames // 10) == 0:
+            print(f"Progress: {int((num / total_frames) * 100)}%")
     out.release()
 
 
