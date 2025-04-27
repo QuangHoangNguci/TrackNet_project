@@ -31,5 +31,5 @@ python main.py \
 ```bash
 python app.py
 ```
-![Alt text](/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/images_result/result_web.png)
+![Alt text](./images_result/result_web.png)
 
