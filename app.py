@@ -1,102 +1,108 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
-from tkinter.ttk import Progressbar
-import subprocess
+import io
 import os
+import tempfile
+import cv2
+import imageio
+import shutil
+from flask import Flask, request, render_template, jsonify
+import base64
+from video_processor import process_video_with_tracknet
+
+app = Flask(__name__)
+
+# Global variables to store video frames
+input_frames = []
+fps = 0
+
+# Directory to save processed videos
+OUTPUT_DIR = "/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/video_output"
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
 
-class VideoProcessingApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Video Processing Application")
-        self.root.geometry("500x250")
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        # Nút chọn video
-        self.select_button = tk.Button(root, text="Select Video", command=self.select_video, height=2)
-        self.select_button.pack(pady=20)
 
-        # Thanh tiến trình
-        self.progress_bar = Progressbar(root, orient="horizontal", length=400, mode="determinate")
-        self.progress_bar.pack(pady=20)
+@app.route('/upload', methods=['POST'])
+def upload_video():
+    global input_frames, fps
+    video_file = request.files['video']
+    video_bytes = video_file.read()
 
-        # Nút bắt đầu xử lý video
-        self.process_button = tk.Button(root, text="Process Video", command=self.start_processing_video, height=2,
-                                        state=tk.DISABLED)
-        self.process_button.pack(pady=20)
+    # Save video to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+        temp_file.write(video_bytes)
+        temp_path = temp_file.name
 
-        self.video_path = None
-        self.output_video_path = None
+    # Read video frames
+    cap = cv2.VideoCapture(temp_path)
+    if not cap.isOpened():
+        os.remove(temp_path)
+        return jsonify({'error': 'Could not open video file'}), 400
 
-    def select_video(self):
-        """Hàm chọn video"""
-        self.video_path = filedialog.askopenfilename(title="Select a video file",
-                                                     filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")])
-        if self.video_path:
-            # Hiển thị thông báo khi video được chọn
-            messagebox.showinfo("Success", "Video uploaded successfully!")
-            # Kích hoạt nút "Process Video"
-            self.process_button.config(state=tk.NORMAL)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    frames = []
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if ret:
+            frames.append(frame)
         else:
-            # Nếu không có video được chọn, vô hiệu hóa nút "Process Video"
-            self.process_button.config(state=tk.DISABLED)
+            break
+    cap.release()
 
-    def start_processing_video(self):
-        """Hàm xử lý video"""
-        if self.video_path:
-            # Vô hiệu hóa nút "Select Video" và "Process Video" khi đang xử lý
-            self.select_button.config(state=tk.DISABLED)
-            self.process_button.config(state=tk.DISABLED)
+    if not frames:
+        os.remove(temp_path)
+        return jsonify({'error': 'No frames found in video'}), 400
 
-            # Xác định đường dẫn video đầu ra
-            self.output_video_path = os.path.splitext(self.video_path)[0] + "_processed.avi"
+    input_frames = frames
 
-            # Chạy câu lệnh xử lý video
-            self.process_video()
+    # Return the video as base64 for display
+    video_file.seek(0)
+    video_b64 = base64.b64encode(video_file.read()).decode('utf-8')
 
-            # Cập nhật thanh tiến trình
-            for i in range(100):
-                self.progress_bar['value'] = i
-                self.root.update_idletasks()
+    # Clean up temporary file
+    os.remove(temp_path)
 
-            # Sau khi xử lý xong, kích hoạt lại nút "Select Video" và "Process Video"
-            self.select_button.config(state=tk.NORMAL)
-            self.process_button.config(state=tk.NORMAL)
+    return jsonify({'video': video_b64})
 
-            # Hiển thị thông báo khi xử lý xong
-            messagebox.showinfo("Processing Complete", "Video processing is complete!")
 
-    def process_video(self):
-        """Hàm xử lý video thông qua câu lệnh shell"""
-        # Đoạn command thực thi xử lý video
-        command = [
-            'python', 'main.py',  # Chạy file chính
-            '--path_ball_track_model', '/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/model_weights/model_best.pt',
-            '--path_court_model', '/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/model_weights/model_tennis_court_det.pt',
-            '--path_bounce_model', '/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/model_weights/bounce_detection_weights.cbm',
-            '--path_input_video', self.video_path,
-            '--path_output_video', self.output_video_path
-        ]
+@app.route('/process', methods=['POST'])
+def process():
+    global input_frames, fps
+    if not input_frames:
+        return jsonify({'error': 'No video uploaded'}), 400
 
-        try:
-            # In ra câu lệnh để kiểm tra
-            print(f"Running command: {' '.join(command)}")
+    # Process the video using TrackNet
+    processed_frames = process_video_with_tracknet(input_frames)
 
-            # Chạy subprocess để thực thi câu lệnh
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # Convert processed frames to video using imageio with H.264 codec
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+        temp_path = temp_file.name
+        # Use imageio to write video with H.264 codec
+        writer = imageio.get_writer(temp_path, fps=fps, codec='libx264', macro_block_size=1)
+        for frame in processed_frames:
+            # Convert BGR (OpenCV) to RGB (imageio expects RGB)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            writer.append_data(frame_rgb)
+        writer.close()
 
-            # Kiểm tra kết quả từ câu lệnh
-            if result.returncode == 0:
-                print("Video processed successfully!")
-                print(f"Output: {result.stdout}")
-            else:
-                print(f"Error: {result.stderr}")
-                messagebox.showerror("Error", f"Processing failed: {result.stderr}")
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            messagebox.showerror("Error", f"An error occurred: {str(e)}")
+    # Save the processed video to OUTPUT_DIR
+    output_filename = os.path.join(OUTPUT_DIR, f"processed_video_{int(os.path.getmtime(temp_path))}.mp4")
+    shutil.copy(temp_path, output_filename)
+
+    # Read the video for base64 encoding
+    with open(temp_path, 'rb') as f:
+        output_video = f.read()
+
+    video_b64 = base64.b64encode(output_video).decode('utf-8')
+
+    # Clean up temporary file
+    os.remove(temp_path)
+
+    return jsonify({'video': video_b64})
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = VideoProcessingApp(root)
-    root.mainloop()
+    app.run(debug=True)

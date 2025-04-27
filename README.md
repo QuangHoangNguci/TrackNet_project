@@ -26,3 +26,10 @@ python main.py \
   --path_input_video <path>/test_vid_match2_short2.mp4 \
   --path_output_video <path>.avi
 ```
+
+### 5. Run webapp
+```bash
+python app.py
+```
+![Alt text](/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/images_result/result_web.png)
+

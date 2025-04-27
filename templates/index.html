@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TrackNet Video Processing</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .video-container { display: flex; justify-content: center; gap: 20px; margin: 20px; }
+        video { width: 400px; height: 300px; }
+        .label { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>TrackNet Video Processing</h1>
+    <div>
+        <input type="file" id="videoInput" accept="video/*">
+    </div>
+    <div class="video-container">
+        <div>
+            <div class="label">Input Video</div>
+            <video id="inputVideo" controls></video>
+        </div>
+        <div>
+            <div class="label">Output Video</div>
+            <video id="outputVideo" controls></video>
+        </div>
+    </div>
+    <button id="processButton" onclick="processVideo()">Processing</button>
+
+    <script>
+        document.getElementById('videoInput').addEventListener('change', async function(event) {
+            const file = event.target.files[0];
+            const formData = new FormData();
+            formData.append('video', file);
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            document.getElementById('inputVideo').src = 'data:video/mp4;base64,' + result.video;
+        });
+
+        async function processVideo() {
+            const response = await fetch('/process', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            if (result.error) {
+                alert(result.error);
+                return;
+            }
+            document.getElementById('outputVideo').src = 'data:video/mp4;base64,' + result.video;
+        }
+    </script>
+</body>
+</html>
