@@ -4,20 +4,20 @@ import tempfile
 import cv2
 import imageio
 import shutil
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, Response
 import base64
 from video_processor import process_video_with_tracknet
+import numpy as np
 
 app = Flask(__name__)
-
-input_frames = []
-fps = 0
-video_duration = 0
 
 # Directory to save processed videos
 OUTPUT_DIR = "/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/video_output"
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
+
+# Store uploaded video temporarily
+uploaded_video = None
 
 @app.route('/')
 def index():
@@ -25,102 +25,115 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_video():
-    global input_frames, fps, video_duration
+    global uploaded_video
     video_file = request.files['video']
-    video_bytes = video_file.read()
-
+    
     # Save video to a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
-        temp_file.write(video_bytes)
+        video_file.save(temp_file.name)
         temp_path = temp_file.name
+        uploaded_video = temp_path  # Store the path
 
-    # Read video frames
-    cap = cv2.VideoCapture(temp_path)
-    if not cap.isOpened():
-        os.remove(temp_path)
-        return jsonify({'error': 'Could not open video file'}), 400
+    try:
+        # Get video duration and create a preview
+        cap = cv2.VideoCapture(temp_path)
+        if not cap.isOpened():
+            return jsonify({'error': 'Could not open video file'}), 400
 
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    video_duration = total_frames / fps
-    
-    frames = []
-    while cap.isOpened():
+        # Get video properties
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps
+
+        # Create a preview (first frame)
         ret, frame = cap.read()
-        if ret:
-            frames.append(frame)
-        else:
-            break
-    cap.release()
+        if not ret:
+            return jsonify({'error': 'Could not read video frame'}), 400
 
-    if not frames:
-        os.remove(temp_path)
-        return jsonify({'error': 'No frames found in video'}), 400
+        # Resize frame for preview if too large
+        max_dimension = 800
+        height, width = frame.shape[:2]
+        if max(height, width) > max_dimension:
+            scale = max_dimension / max(height, width)
+            frame = cv2.resize(frame, None, fx=scale, fy=scale)
 
-    input_frames = frames
+        # Convert frame to base64
+        _, buffer = cv2.imencode('.jpg', frame)
+        preview_b64 = base64.b64encode(buffer).decode('utf-8')
 
-    # Return the video as base64 for display
-    video_file.seek(0)
-    video_b64 = base64.b64encode(video_file.read()).decode('utf-8')
+        # Read the video file for response
+        with open(temp_path, 'rb') as f:
+            video_bytes = f.read()
+        video_b64 = base64.b64encode(video_bytes).decode('utf-8')
 
-    # Clean up temporary file
-    os.remove(temp_path)
+        return jsonify({
+            'video': video_b64,
+            'preview': preview_b64,
+            'duration': duration,
+            'fps': fps,
+            'total_frames': total_frames
+        })
 
-    return jsonify({
-        'video': video_b64,
-        'duration': video_duration
-    })
+    finally:
+        cap.release()
 
 @app.route('/process', methods=['POST'])
 def process():
-    global input_frames, fps
-    if not input_frames:
+    global uploaded_video
+    if not uploaded_video:
         return jsonify({'error': 'No video uploaded'}), 400
 
-    # Get start and end times from request
     data = request.get_json()
     start_time = data.get('startTime', 0)
-    end_time = data.get('endTime', video_duration)
+    end_time = data.get('endTime', 0)
 
-    # Convert times to frame indices
-    start_frame = int(start_time * fps)
-    end_frame = int(end_time * fps)
+    try:
+        # Open video file
+        cap = cv2.VideoCapture(uploaded_video)
+        if not cap.isOpened():
+            return jsonify({'error': 'Could not open video file'}), 400
 
-    # Ensure valid frame range
-    start_frame = max(0, min(start_frame, len(input_frames)))
-    end_frame = max(start_frame, min(end_frame, len(input_frames)))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        start_frame = int(start_time * fps)
+        end_frame = int(end_time * fps)
 
-    # Cut the video frames
-    cut_frames = input_frames[start_frame:end_frame]
+        # Set the frame position
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
-    # Process the cut video using TrackNet
-    processed_frames = process_video_with_tracknet(cut_frames)
+        # Read frames for the selected segment
+        frames = []
+        current_frame = start_frame
+        while current_frame < end_frame:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames.append(frame)
+            current_frame += 1
 
-    # Convert processed frames to video
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
-        temp_path = temp_file.name
-        # Use imageio to write video with H.264 codec
-        writer = imageio.get_writer(temp_path, fps=fps, codec='libx264', macro_block_size=1)
+        if not frames:
+            return jsonify({'error': 'No frames found in selected segment'}), 400
+
+        # Process the frames
+        processed_frames = process_video_with_tracknet(frames)
+
+        # Create output video
+        output_path = os.path.join(OUTPUT_DIR, f"processed_video_{int(os.path.getmtime(uploaded_video))}.mp4")
+        writer = imageio.get_writer(output_path, fps=fps, codec='libx264', macro_block_size=1)
+        
         for frame in processed_frames:
-            # Convert BGR (OpenCV) to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             writer.append_data(frame_rgb)
         writer.close()
 
-    # Save the processed video to OUTPUT_DIR
-    output_filename = os.path.join(OUTPUT_DIR, f"processed_video_{int(os.path.getmtime(temp_path))}.mp4")
-    shutil.copy(temp_path, output_filename)
+        # Read the processed video
+        with open(output_path, 'rb') as f:
+            output_video = f.read()
+        video_b64 = base64.b64encode(output_video).decode('utf-8')
 
-    # Read the video for base64 encoding
-    with open(temp_path, 'rb') as f:
-        output_video = f.read()
+        return jsonify({'video': video_b64})
 
-    video_b64 = base64.b64encode(output_video).decode('utf-8')
-
-    # Clean up temporary file
-    os.remove(temp_path)
-
-    return jsonify({'video': video_b64})
+    finally:
+        cap.release()
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -3,75 +3,381 @@
 <head>
     <title>TrackNet Video Processing</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        .video-container { display: flex; justify-content: center; gap: 20px; margin: 20px; }
-        video { width: 400px; height: 300px; }
-        .label { font-weight: bold; }
-        .time-inputs { margin: 20px; }
-        .time-inputs input { width: 100px; margin: 0 10px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .video-container { 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px; 
+            margin: 20px;
+            flex-wrap: wrap;
+        }
+        .video-wrapper {
+            flex: 1;
+            min-width: 300px;
+            max-width: 600px;
+        }
+        video { 
+            width: 100%;
+            height: auto;
+            max-height: 70vh;
+            object-fit: contain;
+        }
+        .label { 
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .time-inputs { 
+            margin: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .time-inputs input { 
+            width: 100px;
+            margin: 0 10px;
+        }
+        .video-controls {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        .video-timeline {
+            width: 100%;
+            height: 40px;
+            background: #f0f0f0;
+            position: relative;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .timeline-progress {
+            position: absolute;
+            height: 100%;
+            background: #4CAF50;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+        .timeline-selection {
+            position: absolute;
+            height: 100%;
+            background: rgba(76, 175, 80, 0.2);
+            pointer-events: none;
+        }
+        .timeline-handle {
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: #000;
+            cursor: ew-resize;
+        }
+        .timeline-handle.start {
+            left: 0;
+        }
+        .timeline-handle.end {
+            right: 0;
+        }
+        .timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        .upload-container {
+            margin: 20px;
+        }
+        #processButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px;
+        }
+        #processButton:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            margin: 20px;
+        }
+        .video-container {
+            position: relative;
+        }
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        .video-container.selecting .video-overlay {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <h1>TrackNet Video Processing</h1>
-    <div>
-        <input type="file" id="videoInput" accept="video/*">
-    </div>
-    <div class="time-inputs">
-        <label>Start Time (seconds): <input type="number" id="startTime" min="0" step="0.1" value="0"></label>
-        <label>End Time (seconds): <input type="number" id="endTime" min="0" step="0.1" value="0"></label>
-    </div>
-    <div class="video-container">
-        <div>
-            <div class="label">Input Video</div>
-            <video id="inputVideo" controls></video>
+    <div class="container">
+        <h1>TrackNet Video Processing</h1>
+        <div class="upload-container">
+            <input type="file" id="videoInput" accept="video/*">
         </div>
-        <div>
-            <div class="label">Output Video</div>
-            <video id="outputVideo" controls></video>
+        
+        <div class="video-container" id="videoContainer">
+            <div class="video-wrapper">
+                <div class="label">Input Video</div>
+                <video id="inputVideo" controls></video>
+                <div class="video-overlay"></div>
+            </div>
+            <div class="video-wrapper">
+                <div class="label">Output Video</div>
+                <video id="outputVideo" controls></video>
+            </div>
         </div>
+
+        <div class="video-controls">
+            <div class="label">Video Timeline</div>
+            <div class="video-timeline" id="videoTimeline">
+                <div class="timeline-progress" id="timelineProgress"></div>
+                <div class="timeline-selection" id="timelineSelection"></div>
+                <div class="timeline-handle start" id="startHandle"></div>
+                <div class="timeline-handle end" id="endHandle"></div>
+            </div>
+            <div class="timeline-labels">
+                <span id="startTimeLabel">0:00</span>
+                <span id="endTimeLabel">0:00</span>
+            </div>
+        </div>
+
+        <div class="time-inputs">
+            <label>Start Time (seconds): <input type="number" id="startTime" min="0" step="0.1" value="0" readonly></label>
+            <label>End Time (seconds): <input type="number" id="endTime" min="0" step="0.1" value="0" readonly></label>
+        </div>
+
+        <button id="processButton" onclick="processVideo()">Processing</button>
+        <div class="loading" id="loading">Processing video, please wait...</div>
     </div>
-    <button id="processButton" onclick="processVideo()">Processing</button>
 
     <script>
-        document.getElementById('videoInput').addEventListener('change', async function(event) {
-            const file = event.target.files[0];
-            const formData = new FormData();
-            formData.append('video', file);
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-            document.getElementById('inputVideo').src = 'data:video/mp4;base64,' + result.video;
+        let videoDuration = 0;
+        let isDragging = false;
+        let currentHandle = null;
+        let startTime = 0;
+        let endTime = 0;
+        let isSelecting = false;
+        let selectionStart = 0;
+
+        // Format time in seconds to MM:SS format
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Update timeline handles and labels
+        function updateTimeline() {
+            const startHandle = document.getElementById('startHandle');
+            const endHandle = document.getElementById('endHandle');
+            const startTimeLabel = document.getElementById('startTimeLabel');
+            const endTimeLabel = document.getElementById('endTimeLabel');
+            const startTimeInput = document.getElementById('startTime');
+            const endTimeInput = document.getElementById('endTime');
+            const timelineSelection = document.getElementById('timelineSelection');
+
+            const startPercent = (startTime / videoDuration) * 100;
+            const endPercent = (endTime / videoDuration) * 100;
+
+            startHandle.style.left = `${startPercent}%`;
+            endHandle.style.left = `${endPercent}%`;
             
-            // Set default end time to video duration when video is loaded
+            timelineSelection.style.left = `${startPercent}%`;
+            timelineSelection.style.width = `${endPercent - startPercent}%`;
+            
+            startTimeLabel.textContent = formatTime(startTime);
+            endTimeLabel.textContent = formatTime(endTime);
+            
+            startTimeInput.value = startTime.toFixed(1);
+            endTimeInput.value = endTime.toFixed(1);
+
+            // Update video current time
             const video = document.getElementById('inputVideo');
-            video.onloadedmetadata = function() {
-                document.getElementById('endTime').value = video.duration.toFixed(1);
-            };
+            if (video.currentTime < startTime) {
+                video.currentTime = startTime;
+            } else if (video.currentTime > endTime) {
+                video.currentTime = endTime;
+            }
+        }
+
+        // Handle timeline interactions
+        document.getElementById('videoTimeline').addEventListener('mousedown', function(e) {
+            const timeline = document.getElementById('videoTimeline');
+            const rect = timeline.getBoundingClientRect();
+            const clickPosition = (e.clientX - rect.left) / rect.width;
+            const time = clickPosition * videoDuration;
+
+            // Determine which handle is closer
+            const startHandle = document.getElementById('startHandle');
+            const endHandle = document.getElementById('endHandle');
+            const startRect = startHandle.getBoundingClientRect();
+            const endRect = endHandle.getBoundingClientRect();
+
+            if (Math.abs(e.clientX - startRect.left) < Math.abs(e.clientX - endRect.left)) {
+                currentHandle = 'start';
+                startTime = Math.max(0, Math.min(time, endTime - 0.1));
+            } else {
+                currentHandle = 'end';
+                endTime = Math.max(startTime + 0.1, Math.min(time, videoDuration));
+            }
+
+            isDragging = true;
+            updateTimeline();
         });
 
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+
+            const timeline = document.getElementById('videoTimeline');
+            const rect = timeline.getBoundingClientRect();
+            const position = (e.clientX - rect.left) / rect.width;
+            const time = position * videoDuration;
+
+            if (currentHandle === 'start') {
+                startTime = Math.max(0, Math.min(time, endTime - 0.1));
+            } else {
+                endTime = Math.max(startTime + 0.1, Math.min(time, videoDuration));
+            }
+
+            updateTimeline();
+        });
+
+        document.addEventListener('mouseup', function() {
+            isDragging = false;
+            currentHandle = null;
+        });
+
+        // Handle video upload
+        document.getElementById('videoInput').addEventListener('change', async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('video', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                const video = document.getElementById('inputVideo');
+                video.src = 'data:video/mp4;base64,' + result.video;
+                
+                video.onloadedmetadata = function() {
+                    videoDuration = video.duration;
+                    endTime = videoDuration;
+                    updateTimeline();
+                };
+
+                // Add video timeupdate event listener
+                video.addEventListener('timeupdate', function() {
+                    const progress = (video.currentTime / videoDuration) * 100;
+                    document.getElementById('timelineProgress').style.width = `${progress}%`;
+                });
+
+            } catch (error) {
+                console.error('Error uploading video:', error);
+                alert('Error uploading video. Please try again.');
+            }
+        });
+
+        // Handle video processing
         async function processVideo() {
-            const startTime = document.getElementById('startTime').value;
-            const endTime = document.getElementById('endTime').value;
-            
-            const response = await fetch('/process', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    startTime: parseFloat(startTime),
-                    endTime: parseFloat(endTime)
-                })
-            });
-            const result = await response.json();
-            if (result.error) {
-                alert(result.error);
+            if (!videoDuration) {
+                alert('Please upload a video first');
                 return;
             }
-            document.getElementById('outputVideo').src = 'data:video/mp4;base64,' + result.video;
+
+            const loading = document.getElementById('loading');
+            const processButton = document.getElementById('processButton');
+            
+            loading.style.display = 'block';
+            processButton.disabled = true;
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        startTime: startTime,
+                        endTime: endTime
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                document.getElementById('outputVideo').src = 'data:video/mp4;base64,' + result.video;
+            } catch (error) {
+                console.error('Error processing video:', error);
+                alert('Error processing video. Please try again.');
+            } finally {
+                loading.style.display = 'none';
+                processButton.disabled = false;
+            }
         }
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            const video = document.getElementById('inputVideo');
+            if (!video) return;
+
+            switch(e.key) {
+                case '[': // Set start time
+                    startTime = video.currentTime;
+                    updateTimeline();
+                    break;
+                case ']': // Set end time
+                    endTime = video.currentTime;
+                    updateTimeline();
+                    break;
+                case ' ': // Play/Pause
+                    e.preventDefault();
+                    if (video.paused) {
+                        video.play();
+                    } else {
+                        video.pause();
+                    }
+                    break;
+            }
+        });
     </script>
 </body>
 </html>
