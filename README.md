@@ -32,4 +32,7 @@ python main.py \
 python app.py
 ```
 ![Alt text](./images_result/result1.png)
+Result
 ![Alt text](./images_result/result2.png)
+![Alt text](./images_result/result_in.png)
+![Alt text](./images_result/result_out.png)
