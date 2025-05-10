@@ -9,10 +9,15 @@
             margin: 0;
             padding: 20px;
             box-sizing: border-box;
+            background-color: #f5f5f5;
         }
         .container {
             max-width: 1200px;
             margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .video-container { 
             display: flex; 
@@ -25,16 +30,21 @@
             flex: 1;
             min-width: 300px;
             max-width: 600px;
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
         }
         video { 
             width: 100%;
             height: auto;
             max-height: 70vh;
             object-fit: contain;
+            border-radius: 4px;
         }
         .label { 
             font-weight: bold;
             margin-bottom: 10px;
+            color: #333;
         }
         .time-inputs { 
             margin: 20px;
@@ -46,12 +56,18 @@
         .time-inputs input { 
             width: 100px;
             margin: 0 10px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
         .video-controls {
             position: relative;
             width: 100%;
             max-width: 800px;
             margin: 20px auto;
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
         }
         .video-timeline {
             width: 100%;
@@ -61,6 +77,7 @@
             cursor: pointer;
             border-radius: 4px;
             margin-top: 10px;
+            border: 1px solid #ddd;
         }
         .timeline-progress {
             position: absolute;
@@ -68,12 +85,14 @@
             background: #4CAF50;
             opacity: 0.3;
             pointer-events: none;
+            border-radius: 4px;
         }
         .timeline-selection {
             position: absolute;
             height: 100%;
             background: rgba(76, 175, 80, 0.2);
             pointer-events: none;
+            border-radius: 4px;
         }
         .timeline-handle {
             position: absolute;
@@ -98,8 +117,16 @@
         .upload-container {
             margin: 20px;
         }
+        .upload-container input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 400px;
+            cursor: pointer;
+        }
         #processButton {
-            padding: 10px 20px;
+            padding: 12px 24px;
             font-size: 16px;
             background-color: #4CAF50;
             color: white;
@@ -107,16 +134,48 @@
             border-radius: 4px;
             cursor: pointer;
             margin: 20px;
+            transition: background-color 0.3s;
         }
         #processButton:hover {
             background-color: #45a049;
         }
+        #processButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
         .loading {
             display: none;
             margin: 20px;
+            color: #666;
         }
-        .video-container {
-            position: relative;
+        .bounce-images {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f8f8f8;
+        }
+        .bounce-images h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .bounce-image {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .bounce-image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        .bounce-image p {
+            margin: 10px 0;
+            font-weight: bold;
+            color: #333;
         }
         .video-overlay {
             position: absolute;
@@ -130,11 +189,44 @@
         .video-container.selecting .video-overlay {
             display: block;
         }
+        .keyboard-shortcuts {
+            margin: 20px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+            text-align: left;
+        }
+        .keyboard-shortcuts h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .keyboard-shortcuts ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .keyboard-shortcuts li {
+            margin: 5px 0;
+            color: #666;
+        }
+        .keyboard-shortcuts kbd {
+            background-color: #eee;
+            border-radius: 3px;
+            border: 1px solid #b4b4b4;
+            box-shadow: 0 1px 1px rgba(0,0,0,.2);
+            color: #333;
+            display: inline-block;
+            font-size: 0.85em;
+            font-weight: 700;
+            line-height: 1;
+            padding: 2px 4px;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>TrackNet Video Processing</h1>
+        
         <div class="upload-container">
             <input type="file" id="videoInput" accept="video/*">
         </div>
@@ -170,8 +262,19 @@
             <label>End Time (seconds): <input type="number" id="endTime" min="0" step="0.1" value="0" readonly></label>
         </div>
 
-        <button id="processButton" onclick="processVideo()">Processing</button>
+        <div class="keyboard-shortcuts">
+            <h3>Keyboard Shortcuts</h3>
+            <ul>
+                <li><kbd>[</kbd> Set start time at current position</li>
+                <li><kbd>]</kbd> Set end time at current position</li>
+                <li><kbd>Space</kbd> Play/Pause video</li>
+            </ul>
+        </div>
+
+        <button id="processButton">Processing</button>
         <div class="loading" id="loading">Processing video, please wait...</div>
+        
+        <div id="bounceImagesContainer"></div>
     </div>
 
     <script>
@@ -180,8 +283,6 @@
         let currentHandle = null;
         let startTime = 0;
         let endTime = 0;
-        let isSelecting = false;
-        let selectionStart = 0;
 
         // Format time in seconds to MM:SS format
         function formatTime(seconds) {
@@ -340,11 +441,36 @@
                 const result = await response.json();
                 
                 if (result.error) {
-                    alert(result.error);
-                    return;
+                    throw new Error(result.error);
                 }
 
+                // Hiển thị video đã xử lý
                 document.getElementById('outputVideo').src = 'data:video/mp4;base64,' + result.video;
+
+                // Hiển thị các ảnh zoom
+                const bounceContainer = document.getElementById('bounceImagesContainer');
+                bounceContainer.innerHTML = '<h2>Bounce Points</h2>';
+                
+                if (result.bounce_frames && result.bounce_frames.length > 0) {
+                    result.bounce_frames.forEach(bounce => {
+                        const bounceDiv = document.createElement('div');
+                        bounceDiv.className = 'bounce-image';
+                        bounceDiv.innerHTML = `
+                            <p>Time: ${formatTime(bounce.time)} | <span style="color:${bounce.inout === 'IN' ? '#4CAF50' : '#e53935'}">${bounce.inout}</span></p>
+                            <div style="display: flex; gap: 20px; justify-content: center; align-items: flex-start; flex-wrap: wrap;">
+                                <div>
+                                    <div style='font-size:13px;color:#333;margin-bottom:3px;'>Ball Zoom</div>
+                                    <img src="data:image/jpeg;base64,${bounce.image}" alt="Bounce point" style="max-width: 480px; max-height: 480px;">
+                                </div>
+                                ${bounce.minimap ? `<div><div style='font-size:13px;color:#333;margin-bottom:3px;'>2D Minimap (Zoom)</div><img src="data:image/jpeg;base64,${bounce.minimap}" alt="Minimap" style="max-width: 400px; max-height: 400px;"></div>` : ''}
+                            </div>
+                        `;
+                        bounceContainer.appendChild(bounceDiv);
+                    });
+                } else {
+                    bounceContainer.innerHTML += '<p>No bounce points detected</p>';
+                }
+
             } catch (error) {
                 console.error('Error processing video:', error);
                 alert('Error processing video. Please try again.');
@@ -378,6 +504,9 @@
                     break;
             }
         });
+
+        // Add process button click handler
+        document.getElementById('processButton').addEventListener('click', processVideo);
     </script>
 </body>
 </html>

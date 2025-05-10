@@ -114,7 +114,7 @@ def process():
             return jsonify({'error': 'No frames found in selected segment'}), 400
 
         # Process the frames
-        processed_frames = process_video_with_tracknet(frames)
+        processed_frames, bounce_infos = process_video_with_tracknet(frames)
 
         # Create output video
         output_path = os.path.join(OUTPUT_DIR, f"processed_video_{int(os.path.getmtime(uploaded_video))}.mp4")
@@ -130,7 +130,48 @@ def process():
             output_video = f.read()
         video_b64 = base64.b64encode(output_video).decode('utf-8')
 
-        return jsonify({'video': video_b64})
+        # Trích xuất các bounce frames (ảnh zoom điểm nảy) và in/out
+        bounce_frames = []
+        for info in bounce_infos:
+            idx = info['frame_idx']
+            frame = processed_frames[idx]
+            # Crop vùng quanh điểm nảy (kích thước 500x500)
+            x, y = info['pos']
+            h, w = frame.shape[:2]
+            x1 = max(0, x-250)
+            y1 = max(0, y-250)
+            x2 = min(w, x+250)
+            y2 = min(h, y+250)
+            crop = frame[y1:y2, x1:x2]
+            _, buffer = cv2.imencode('.jpg', crop)
+            img_b64 = base64.b64encode(buffer).decode('utf-8')
+            # Encode minimap 2D (zoom quanh điểm bóng nảy)
+            minimap = info.get('minimap')
+            minimap_zoom_b64 = None
+            if minimap is not None:
+                # Tính toạ độ điểm bóng nảy trên minimap
+                h_minimap, w_minimap = minimap.shape[:2]
+                mask = cv2.inRange(minimap, (0, 200, 200), (0, 255, 255))
+                ys, xs = np.where(mask > 0)
+                if len(xs) > 0 and len(ys) > 0:
+                    cx = int(np.mean(xs))
+                    cy = int(np.mean(ys))
+                else:
+                    cx, cy = w_minimap//2, h_minimap//2
+                # Crop vùng lớn hơn quanh điểm bóng nảy trên minimap (500x500)
+                crop_size = 550
+                half_crop = crop_size // 2
+                mx1 = max(0, cx-half_crop)
+                my1 = max(0, cy-half_crop)
+                mx2 = min(w_minimap, cx+half_crop)
+                my2 = min(h_minimap, cy+half_crop)
+                minimap_crop = minimap[my1:my2, mx1:mx2]
+                minimap_crop = cv2.resize(minimap_crop, (500, 500))
+                _, buf2 = cv2.imencode('.jpg', minimap_crop)
+                minimap_zoom_b64 = base64.b64encode(buf2).decode('utf-8')
+            bounce_frames.append({'image': img_b64, 'time': idx/fps, 'inout': info['inout'], 'minimap': minimap_zoom_b64})
+
+        return jsonify({'video': video_b64, 'bounce_frames': bounce_frames})
 
     finally:
         cap.release()
