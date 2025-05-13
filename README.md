@@ -2,6 +2,10 @@
 
 This project implements a computer vision-based pipeline to track a tennis ball during gameplay and detect bounce events using TrackNet-deep learning and machine learning techniques.
 
+## Dataset to train model
+You can download dataset in here:
+[Dataset](https://drive.google.com/drive/folders/1e33BUDc4xONFO3aN71Qrkvr0H8_mCsZM?usp=sharing)
+
 ## How to Run
 
 ### 1. Prepare the Input
