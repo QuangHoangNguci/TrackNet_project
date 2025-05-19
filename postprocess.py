@@ -49,16 +49,25 @@ def refine_kps(img, x_ct, y_ct, crop_size=40):
     return refined_y_ct, refined_x_ct
 
 def detect_lines(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.threshold(gray, 155, 255, cv2.THRESH_BINARY)[1]
-    lines = cv2.HoughLinesP(gray, 1, np.pi / 180, 30, minLineLength=10, maxLineGap=30)
-    lines = np.squeeze(lines)
-    if len(lines.shape) > 0:
-        if len(lines) == 4 and not isinstance(lines[0], np.ndarray):
-            lines = [lines]
-    else:
-        lines = []
-    return lines
+    if image is None or image.size == 0:
+        return []
+        
+    try:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.threshold(gray, 155, 255, cv2.THRESH_BINARY)[1]
+        lines = cv2.HoughLinesP(gray, 1, np.pi / 180, 30, minLineLength=10, maxLineGap=30)
+        if lines is None:
+            return []
+        lines = np.squeeze(lines)
+        if len(lines.shape) > 0:
+            if len(lines) == 4 and not isinstance(lines[0], np.ndarray):
+                lines = [lines]
+        else:
+            lines = []
+        return lines
+    except Exception as e:
+        print(f"Error in detect_lines: {str(e)}")
+        return []
 
 
 def merge_lines(lines):

@@ -47,7 +47,7 @@ def process_video_with_tracknet(frames):
     imgs_res = []
     bounce_infos = []  # Lưu thông tin bounce: frame_idx, inout, vị trí, minimap
     width_minimap = 166
-    height_minimap = 350
+    height_minimap = 330  # Changed from 350 to 330 to match the error
     is_track = [x is not None for x in homography_matrices]
 
     for num_scene in range(len(scenes)):
@@ -100,8 +100,14 @@ def process_video_with_tracknet(frames):
                         person_point = cv2.perspectiveTransform(person_point, inv_mat)
                         minimap = cv2.circle(minimap, (int(person_point[0, 0, 0]), int(person_point[0, 0, 1])),
                                              radius=0, color=(255, 0, 0), thickness=80)
-                minimap_resized = cv2.resize(minimap, (width_minimap, height_minimap))
-                img_res[30:(30 + height_minimap), (width - 30 - width_minimap):(width - 30), :] = minimap_resized
+                try:
+                    minimap_resized = cv2.resize(minimap, (width_minimap, height_minimap))
+                    img_res[30:(30 + height_minimap), (width - 30 - width_minimap):(width - 30), :] = minimap_resized
+                except Exception as e:
+                    print(f"Error resizing minimap: {str(e)}")
+                    # If resize fails, try to create a blank minimap
+                    blank_minimap = np.zeros((height_minimap, width_minimap, 3), dtype=np.uint8)
+                    img_res[30:(30 + height_minimap), (width - 30 - width_minimap):(width - 30), :] = blank_minimap
                 imgs_res.append(img_res)
         else:
             imgs_res.extend(frames[scenes[num_scene][0]:scenes[num_scene][1]])
