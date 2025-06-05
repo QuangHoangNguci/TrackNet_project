@@ -1,0 +1,267 @@
+body { 
+    font-family: Arial, sans-serif; 
+    text-align: center; 
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.video-container { 
+    display: flex; 
+    justify-content: center; 
+    gap: 20px; 
+    margin: 20px;
+    flex-wrap: wrap;
+}
+
+.video-wrapper {
+    flex: 1;
+    min-width: 400px;
+    max-width: 800px;
+    background-color: #f8f8f8;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+video { 
+    width: 100%;
+    height: auto;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.label { 
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 1.2em;
+}
+
+.time-inputs { 
+    margin: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.time-inputs input { 
+    width: 100px;
+    margin: 0 10px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.video-controls {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    margin: 20px auto;
+    background-color: #f8f8f8;
+    padding: 20px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.video-timeline {
+    width: 100%;
+    height: 40px;
+    background: #f0f0f0;
+    position: relative;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+    border: 1px solid #ddd;
+}
+
+.timeline-progress {
+    position: absolute;
+    height: 100%;
+    background: #4CAF50;
+    opacity: 0.3;
+    pointer-events: none;
+    border-radius: 4px;
+}
+
+.timeline-selection {
+    position: absolute;
+    height: 100%;
+    background: rgba(76, 175, 80, 0.2);
+    pointer-events: none;
+    border-radius: 4px;
+}
+
+.timeline-handle {
+    position: absolute;
+    width: 4px;
+    height: 100%;
+    background: #000;
+    cursor: ew-resize;
+}
+
+.timeline-handle.start {
+    left: 0;
+}
+
+.timeline-handle.end {
+    right: 0;
+}
+
+.timeline-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 14px;
+    color: #666;
+}
+
+.upload-container {
+    margin: 20px;
+}
+
+.upload-container input[type="file"] {
+    padding: 15px;
+    border: 2px dashed #ddd;
+    border-radius: 4px;
+    width: 100%;
+    max-width: 600px;
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: border-color 0.3s;
+}
+
+.upload-container input[type="file"]:hover {
+    border-color: #4CAF50;
+}
+
+.action-button {
+    padding: 12px 24px;
+    font-size: 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 20px;
+    transition: background-color 0.3s;
+    min-width: 150px;
+}
+
+.action-button:hover {
+    background-color: #45a049;
+}
+
+.action-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.loading {
+    display: none;
+    margin: 20px;
+    color: #666;
+    font-size: 1.1em;
+}
+
+.bounce-images {
+    margin: 20px;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+}
+
+.bounce-images h2 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.bounce-image {
+    margin: 15px 0;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.bounce-image img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+.bounce-image p {
+    margin: 10px 0;
+    font-weight: bold;
+    color: #333;
+}
+
+.video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.1);
+    display: none;
+}
+
+.video-container.selecting .video-overlay {
+    display: block;
+}
+
+.keyboard-shortcuts {
+    margin: 20px;
+    padding: 20px;
+    background-color: #f8f8f8;
+    border-radius: 4px;
+    text-align: left;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.keyboard-shortcuts h3 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1.2em;
+}
+
+.keyboard-shortcuts ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.keyboard-shortcuts li {
+    margin: 10px 0;
+    color: #666;
+    font-size: 1.1em;
+}
+
+.keyboard-shortcuts kbd {
+    background-color: #eee;
+    border-radius: 3px;
+    border: 1px solid #b4b4b4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.2);
+    color: #333;
+    display: inline-block;
+    font-size: 0.85em;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    white-space: nowrap;
+    margin: 0 5px;
+} 

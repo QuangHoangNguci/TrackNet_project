@@ -4,7 +4,6 @@ import torch
 from court_detection_net import CourtDetectorNet
 from court_reference import CourtReference
 from bounce_detector import BounceDetector
-from person_detector import PersonDetector
 from ball_detector import BallDetector
 from utils import scene_detect, get_court_img
 
@@ -22,19 +21,15 @@ def process_video_with_tracknet(frames):
     scenes = scene_detect(frames)
 
     # Ball detection
-    ball_detector = BallDetector('/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/model_weights/model_best.pt', device)
+    ball_detector = BallDetector('./model_weights/model_best.pt', device)
     ball_track = ball_detector.infer_model(frames)
 
     # Court detection
-    court_detector = CourtDetectorNet('/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/model_weights/model_tennis_court_det.pt', device)
+    court_detector = CourtDetectorNet('./model_weights/model_tennis_court_det.pt', device)
     homography_matrices, kps_court = court_detector.infer_model(frames)
 
-    # Person detection
-    person_detector = PersonDetector(device)
-    persons_top, persons_bottom = person_detector.track_players(frames, homography_matrices, filter_players=False)
-
     # Bounce detection
-    bounce_detector = BounceDetector('/Users/QuangHoang/PycharmProjects/pythonProject/TrackNet_project/model_weights/bounce_detection_weights.cbm')
+    bounce_detector = BounceDetector('./model_weights/bounce_detection_weights.cbm')
     x_ball = [x[0] for x in ball_track]
     y_ball = [x[1] for x in ball_track]
     bounces = bounce_detector.predict(x_ball, y_ball)
@@ -89,17 +84,6 @@ def process_video_with_tracknet(frames):
                                            radius=0, color=(0, 255, 255), thickness=50)
                     # Lưu thông tin bounce kèm minimap
                     bounce_infos.append({'frame_idx': i, 'inout': inout, 'pos': pos, 'minimap': minimap.copy()})
-                persons = persons_top[i] + persons_bottom[i]
-                for j, person in enumerate(persons):
-                    if len(person[0]) > 0:
-                        person_bbox = list(person[0])
-                        img_res = cv2.rectangle(img_res, (int(person_bbox[0]), int(person_bbox[1])),
-                                                (int(person_bbox[2]), int(person_bbox[3])), [255, 0, 0], 2)
-                        person_point = list(person[1])
-                        person_point = np.array(person_point, dtype=np.float32).reshape(1, 1, 2)
-                        person_point = cv2.perspectiveTransform(person_point, inv_mat)
-                        minimap = cv2.circle(minimap, (int(person_point[0, 0, 0]), int(person_point[0, 0, 1])),
-                                             radius=0, color=(255, 0, 0), thickness=80)
                 try:
                     minimap_resized = cv2.resize(minimap, (width_minimap, height_minimap))
                     img_res[30:(30 + height_minimap), (width - 30 - width_minimap):(width - 30), :] = minimap_resized
