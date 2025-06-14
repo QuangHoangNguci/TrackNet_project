@@ -52,6 +52,7 @@ def process_video_with_tracknet(frames):
         scene_rate = sum_track / (len_track + eps)
         if scene_rate > 0.5:
             court_img = get_court_img()
+            # duyet qua tung frame
             for i in range(scenes[num_scene][0], scenes[num_scene][1]):
                 img_res = frames[i].copy()
                 inv_mat = homography_matrices[i]
