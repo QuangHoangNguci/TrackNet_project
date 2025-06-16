@@ -9,6 +9,7 @@ import base64
 from video_processor import process_video_with_tracknet
 import numpy as np
 from datetime import datetime
+import subprocess
 
 app = Flask(__name__, static_folder='templates/static')
 
@@ -16,14 +17,16 @@ app = Flask(__name__, static_folder='templates/static')
 UPLOAD_FOLDER = "./uploads"
 CUT_FOLDER = "./video_cut"
 OUTPUT_DIR = "./video_output"
+TEMP_FOLDER = "./temp"
 
-for directory in [UPLOAD_FOLDER, CUT_FOLDER, OUTPUT_DIR]:
+for directory in [UPLOAD_FOLDER, CUT_FOLDER, OUTPUT_DIR, TEMP_FOLDER]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['CUT_FOLDER'] = CUT_FOLDER
 app.config['OUTPUT_DIR'] = OUTPUT_DIR
+app.config['TEMP_FOLDER'] = TEMP_FOLDER
 
 # Store uploaded video temporarily
 uploaded_video = None
@@ -62,7 +65,7 @@ def upload_video():
         video_file.save(filepath)
         uploaded_video = filepath
 
-        # Get video duration and create a preview
+        # Open video file
         cap = cv2.VideoCapture(filepath)
         if not cap.isOpened():
             return jsonify({'error': 'Could not open video file'}), 400
@@ -71,6 +74,59 @@ def upload_video():
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # Check if video needs resizing
+        if width != 1280 or height != 720:
+            print(f"Resizing video from {width}x{height} to 1280x720")
+            # Create temporary file for resized video
+            temp_path = os.path.join(app.config['TEMP_FOLDER'], f"temp_{timestamp}.mp4")
+            
+            # Create video writer
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(temp_path, fourcc, fps, (1280, 720))
+
+            # Process each frame
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Calculate aspect ratio
+                aspect_ratio = width / height
+                if aspect_ratio > 16/9:  # Wider than 16:9
+                    new_width = 1280
+                    new_height = int(1280 / aspect_ratio)
+                else:  # Taller than 16:9
+                    new_height = 720
+                    new_width = int(720 * aspect_ratio)
+                
+                # Resize maintaining aspect ratio
+                resized = cv2.resize(frame, (new_width, new_height))
+                
+                # Create black background
+                background = np.zeros((720, 1280, 3), dtype=np.uint8)
+                
+                # Calculate position to paste resized frame
+                x_offset = (1280 - new_width) // 2
+                y_offset = (720 - new_height) // 2
+                
+                # Paste resized frame onto background
+                background[y_offset:y_offset+new_height, x_offset:x_offset+new_width] = resized
+                
+                # Write frame
+                out.write(background)
+
+            # Release resources
+            cap.release()
+            out.release()
+
+            # Replace original file with resized version
+            os.replace(temp_path, filepath)
+            
+            # Reopen video to get preview
+            cap = cv2.VideoCapture(filepath)
 
         # Create a preview (first frame)
         ret, frame = cap.read()
@@ -332,6 +388,91 @@ def process():
     finally:
         if 'cap' in locals():
             cap.release()
+
+@app.route('/convert', methods=['POST'])
+def convert_video():
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+
+    video_file = request.files['video']
+    if not video_file:
+        return jsonify({'error': 'No video file provided'}), 400
+
+    webm_path = None
+    mp4_path = None
+    
+    try:
+        # Save the WebM file temporarily
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        webm_path = os.path.join(app.config['TEMP_FOLDER'], f'temp_{timestamp}.webm')
+        mp4_path = os.path.join(app.config['UPLOAD_FOLDER'], f'video_{timestamp}.mp4')
+        
+        # Save the uploaded file
+        video_file.save(webm_path)
+        print(f"Saved WebM file to: {webm_path}")  # Debug log
+
+        # Check if FFmpeg is installed
+        try:
+            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            print("FFmpeg is not installed or not found in PATH")  # Debug log
+            return jsonify({'error': 'FFmpeg is not installed. Please install FFmpeg to use this feature.'}), 500
+
+        # Convert WebM to MP4 using FFmpeg
+        command = [
+            'ffmpeg',
+            '-i', webm_path,
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '23',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-y',  # Overwrite output file if it exists
+            mp4_path
+        ]
+
+        print(f"Running FFmpeg command: {' '.join(command)}")  # Debug log
+        
+        # Run FFmpeg with error capture
+        result = subprocess.run(command, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr}")  # Debug log
+            raise Exception(f"FFmpeg conversion failed: {result.stderr}")
+
+        # Verify the output file exists and has content
+        if not os.path.exists(mp4_path) or os.path.getsize(mp4_path) == 0:
+            raise Exception("Output file was not created or is empty")
+
+        print(f"Successfully converted video to: {mp4_path}")  # Debug log
+
+        # Clean up the temporary WebM file
+        if os.path.exists(webm_path):
+            os.remove(webm_path)
+            print(f"Cleaned up temporary file: {webm_path}")  # Debug log
+
+        # Return the URL for the converted video
+        video_url = url_for('uploaded_file', filename=os.path.basename(mp4_path))
+        return jsonify({'video_url': video_url})
+
+    except Exception as e:
+        print(f"Error converting video: {str(e)}")  # Debug log
+        # Clean up any temporary files
+        if webm_path and os.path.exists(webm_path):
+            try:
+                os.remove(webm_path)
+                print(f"Cleaned up temporary file after error: {webm_path}")  # Debug log
+            except Exception as cleanup_error:
+                print(f"Error cleaning up temporary file: {str(cleanup_error)}")  # Debug log
+                
+        if mp4_path and os.path.exists(mp4_path):
+            try:
+                os.remove(mp4_path)
+                print(f"Cleaned up output file after error: {mp4_path}")  # Debug log
+            except Exception as cleanup_error:
+                print(f"Error cleaning up output file: {str(cleanup_error)}")  # Debug log
+                
+        return jsonify({'error': f'Error converting video: {str(e)}'}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -4,6 +4,13 @@ let currentHandle = null;
 let startTime = 0;
 let endTime = 0;
 let currentVideoUrl = null;
+let isRecording = false;
+
+// Video recording variables
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingStartTime = 0;
+let recordingTimer = null;
 
 // Format time in seconds to MM:SS format
 function formatTime(seconds) {
@@ -176,37 +183,12 @@ document.getElementById('cutButton').addEventListener('click', async function() 
 
         // Display cut video in input video player
         const inputVideo = document.getElementById('inputVideo');
-        
-        // Clear any existing source
-        inputVideo.removeAttribute('src');
-        inputVideo.load();
-        
-        // Set new source
-        const cutVideoUrl = result.video_url.startsWith('/') ? result.video_url : '/' + result.video_url;
-        console.log('Setting video source to:', cutVideoUrl); // Debug log
-        
-        // Add event listeners before setting src
-        inputVideo.onloadeddata = function() {
-            console.log('Cut video loaded successfully');
-            loading.style.display = 'none';
-            cutButton.disabled = false;
-        };
-        
-        inputVideo.onerror = function(e) {
-            console.error('Error loading cut video:', e);
-            console.error('Video error code:', inputVideo.error.code);
-            console.error('Video error message:', inputVideo.error.message);
-            alert('Error loading cut video. Please try again.');
-            loading.style.display = 'none';
-            cutButton.disabled = false;
-        };
-
-        // Set the source after adding event listeners
-        inputVideo.src = cutVideoUrl;
+        inputVideo.src = result.video_url;
 
     } catch (error) {
         console.error('Error cutting video:', error);
         alert('Error cutting video. Please try again.');
+    } finally {
         loading.style.display = 'none';
         cutButton.disabled = false;
     }
@@ -321,5 +303,123 @@ document.getElementById('endTime').addEventListener('input', function(e) {
     if (!isNaN(newEndTime) && newEndTime > startTime && newEndTime <= videoDuration) {
         endTime = newEndTime;
         updateTimeline();
+    }
+});
+
+// Update recording timer
+function updateRecordingTimer() {
+    const elapsedTime = Math.floor((Date.now() - recordingStartTime) / 1000);
+    document.getElementById('recordingTimer').textContent = formatTime(elapsedTime);
+}
+
+// Handle record button click
+document.getElementById('recordButton').addEventListener('click', async function() {
+    const recordButton = document.getElementById('recordButton');
+    const recordingControls = document.getElementById('recordingControls');
+    const previewVideo = document.getElementById('previewVideo');
+    
+    if (!isRecording) {
+        // Start recording
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: 1280,
+                    height: 720,
+                    aspectRatio: 16/9
+                },
+                audio: true
+            });
+            
+            previewVideo.srcObject = stream;
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 2500000 // 2.5 Mbps
+            });
+            
+            recordedChunks = [];
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const formData = new FormData();
+                formData.append('video', blob, 'recorded_video.webm');
+                
+                try {
+                    const response = await fetch('/convert', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Error converting video');
+                    }
+                    
+                    const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Update video source
+                    const video = document.getElementById('uploadedVideo');
+                    video.src = data.video_url;
+                    currentVideoUrl = data.video_url;
+                    
+                    // Hiển thị lại container (dùng flex để căn giữa)
+                    document.getElementById('uploadedVideoContainer').style.display = 'flex';
+                    
+                    // Reset recording controls
+                    recordingControls.style.display = 'none';
+                    previewVideo.srcObject = null;
+                    
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // Initialize video duration and timeline
+                    video.onloadedmetadata = function() {
+                        videoDuration = video.duration;
+                        endTime = videoDuration;
+                        startTime = 0;
+                        updateTimeline();
+                        
+                        // Add video timeupdate event listener
+                        video.addEventListener('timeupdate', function() {
+                            const progress = (video.currentTime / videoDuration) * 100;
+                            document.getElementById('timelineProgress').style.width = `${progress}%`;
+                        });
+                    };
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error converting video. Please try again.');
+                }
+            };
+            
+            mediaRecorder.start();
+            recordingControls.style.display = 'block';
+            recordButton.textContent = 'Stop Recording';
+            recordButton.classList.add('recording');
+            isRecording = true;
+            
+            // Start timer
+            recordingStartTime = Date.now();
+            recordingTimer = setInterval(updateRecordingTimer, 1000);
+            
+        } catch (error) {
+            console.error('Error accessing camera:', error);
+            alert('Error accessing camera. Please make sure you have granted camera permissions.');
+        }
+    } else {
+        // Stop recording
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            clearInterval(recordingTimer);
+            recordButton.textContent = 'Start Recording';
+            recordButton.classList.remove('recording');
+            isRecording = false;
+        }
     }
 }); 

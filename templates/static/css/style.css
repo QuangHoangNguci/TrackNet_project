@@ -16,15 +16,20 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.video-container { 
-    display: flex; 
-    justify-content: center; 
-    gap: 20px; 
+.video-container {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
     margin: 20px;
     flex-wrap: wrap;
 }
 
 .video-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     flex: 1;
     min-width: 400px;
     max-width: 800px;
@@ -264,4 +269,63 @@ video {
     padding: 2px 4px;
     white-space: nowrap;
     margin: 0 5px;
+}
+
+.upload-options {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.upload-section {
+    flex: 1;
+    max-width: 500px;
+    padding: 20px;
+    background-color: #f8f8f8;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.upload-section h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+#recordingControls {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#previewVideo {
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    background-color: #000;
+    margin-bottom: 15px;
+    border-radius: 8px;
+}
+
+#recordingTimer {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin: 10px 0;
+}
+
+#recordButton {
+    background-color: #4CAF50;
+    width: 100%;
+}
+
+#recordButton:hover {
+    background-color: #45a049;
+}
+
+#recordButton.recording {
+    background-color: #e53935;
+}
+#recordButton.recording:hover {
+    background-color: #b71c1c;
 } 

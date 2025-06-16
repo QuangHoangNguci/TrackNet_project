@@ -9,7 +9,20 @@
         <h1>TrackNet Video Processing</h1>
         
         <div class="upload-container">
-            <input type="file" id="videoInput" accept="video/*">
+            <div class="upload-options">
+                <div class="upload-section">
+                    <h3>Upload Video</h3>
+                    <input type="file" id="videoInput" accept="video/*">
+                </div>
+                <div class="upload-section">
+                    <h3>Record Video</h3>
+                    <button id="recordButton" class="action-button">Start Recording</button>
+                    <div id="recordingControls" style="display: none;">
+                        <video id="previewVideo" autoplay muted></video>
+                        <div id="recordingTimer">00:00</div>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div class="video-container" id="uploadedVideoContainer">
